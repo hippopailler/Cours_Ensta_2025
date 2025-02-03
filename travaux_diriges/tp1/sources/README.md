@@ -83,7 +83,8 @@ S(p)= MFlops avec p threads/ MFlops avec 1 thread
 
 ![Etude des courbes de speed up](courbes.png)
 
-Les courbes de speedup ne font pas vraiment sens, on n'observe pas d'accélération ou d'augmentaion du Mflops avec le nombre de threads
+Les courbes de speedup ne font pas vraiment sens, on n'observe pas d'accélération ou d'augmentaion du Mflops avec le nombre de threads. --> Pourquoi ?
+Afin d'optimiser la vitesse d'exécution, il faut que la mise en cache se fasse dans un cache privé propre à chaque cœur. Hors, selon comment est effectuée la parallélisation, cela peut entraîner plusieurs mises en cache des mêmes données, qui n'auraient pas forcément été nécessaires. En s'assurant que la parallélisation s'effectue de la meilleure des manières, on peut s'assurer d'une exécution plus rapide. D'où un passage par produit par blocs
 
 ### Produit par blocs
 
@@ -92,14 +93,14 @@ Les courbes de speedup ne font pas vraiment sens, on n'observe pas d'accélérat
   szBlock         | MFlops  | MFlops(n=2048) | MFlops(n=512)  | MFlops(n=4096)
 ------------------|---------|----------------|----------------|---------------
 origine (=max)    |
-32                |
-64                |
-128               |
-256               |
-512               |
-1024              |
+32                |2131     |1843.12         |2253.33         |1869.78
+64                |1666.03  |1957.27         |2412.11
+128               |2195.44  |1948.92         |2215.08
+256               |2098.15  |1934.57         |2474.82
+512               |2004.46  |1941.34         |1743.55
+1024              |1795.12  |1830.95         |2382.13
 
-*Discuter les résultats.*
+Encore une fois les résultats ne semblent pas vraiment cohérents et on observe pas d'amélioration majeure avec ce produit par blocs.
 
 
 
@@ -108,12 +109,12 @@ origine (=max)    |
 
   szBlock      | OMP_NUM | MFlops  | MFlops(n=2048) | MFlops(n=512)  | MFlops(n=4096)|
 ---------------|---------|---------|----------------|----------------|---------------|
-1024           |  1      |         |                |                |               |
-1024           |  8      |         |                |                |               |
-512            |  1      |         |                |                |               |
-512            |  8      |         |                |                |               |
+1024           |  1      |2162.91  |1967.99         |1927.38         |1788.26        |
+1024           |  8      |1760.56  |1923.07         |2089.73         |1894.89        |
+512            |  1      |2151.44  |1905.59         |2173.18         |1730.18        |
+512            |  8      |2116.16  |1745.24         |2365.56         |1868.2         |
 
-*Discuter les résultats.*
+Je vois pas du tout ce qu'on peut en tirer encore une fois, pas d'amélioration majeure, la parallélisation ou les produits n'apportent que des améliorations très légères et encore.
 
 
 ### Comparaison avec BLAS, Eigen et numpy
