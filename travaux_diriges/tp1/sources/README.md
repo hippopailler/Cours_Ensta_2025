@@ -81,7 +81,7 @@ S(p)= MFlops avec p threads/ MFlops avec 1 thread
 ​
  
 
-![Etude des courbes de speed up](/home/hippolyte/OS202/Cours_Ensta_2025/travaux_diriges/tp1/sources/4733f212-c0a5-4f63-af9f-ca9183d886f8.png)
+![Etude des courbes de speed up](courbes.png)
 
 Les courbes de speedup ne font pas vraiment sens, on n'observe pas d'accélération ou d'augmentaion du Mflops avec le nombre de threads
 
