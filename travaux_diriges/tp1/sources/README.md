@@ -62,28 +62,32 @@ On se place dans le pire cas, où à chaque changement de ligne le cache de la l
 
 
 ### OMP sur la meilleure boucle
+Il fallait mettre :#pragma omp parallel for (pour permettre la parallélisation !)
 
 ``
 
   OMP_NUM         | MFlops  | MFlops(n=2048) | MFlops(n=512)  | MFlops(n=4096)
 ------------------|---------|----------------|----------------|---------------
 1                 |1930.77  |1898.3          |2334.6          |1807.47
-2                 |1706     |1891.32         |2009.88         |1873.09
-3                 |2050     |1905.38         |2353.66         |1863.88
-4                 |2013.52  |1883.24         |2107.13         |1851.34
-5                 |2113.36  |1883.71         |2517.09         |1865
-6                 |2137.72  |1870.88         |2369.02         |1897.41
-7                 |2087.08  |1929.36         |2260.58         |1879.46
-8                 |1789.72  |1912.29         |2050.54         |1914.25
-9                 |2061.69  |1709.68         |2140.84         |1875.29
+2                 |2221.94  |3181.38         |2412.47         |2412.47
+3                 |5212.52  |4115.6          |2797.5          |3626.97
+4                 |4932.16  |5355.76         |3495.36         |4932.05
+5                 |5724.39  |5991.23         |3947.04         |5521.13
+6                 |5469.47  |6682.94         |5089.48         |6026.62
+7                 |7725.19  |7910.59         |5316.65         |6303.8
+8                 |6864.1   |8743.94         |4006.54         |8120.24
 *Tracer les courbes de speedup (pour chaque valeur de n), discuter les résultats.*
 S(p)= MFlops avec p threads/ MFlops avec 1 thread
 ​
  
 
-![Etude des courbes de speed up](courbes.png)
+![Etude des courbes de speed up (avant ajout pragma)](courbes.png)
 
+![Etude des courbes de speed up (après ajout pragma)](courbes2.png)
 Les courbes de speedup ne font pas vraiment sens, on n'observe pas d'accélération ou d'augmentaion du Mflops avec le nombre de threads. --> Pourquoi ?
+
+Après ajout du pragma on observe bien une amélioration des performances avec le nombre de coeurs, la parallélisation permet bien d'augmenter les performances de calcul.
+
 Afin d'optimiser la vitesse d'exécution, il faut que la mise en cache se fasse dans un cache privé propre à chaque cœur. Hors, selon comment est effectuée la parallélisation, cela peut entraîner plusieurs mises en cache des mêmes données, qui n'auraient pas forcément été nécessaires. En s'assurant que la parallélisation s'effectue de la meilleure des manières, on peut s'assurer d'une exécution plus rapide. D'où un passage par produit par blocs
 
 ### Produit par blocs
@@ -93,14 +97,16 @@ Afin d'optimiser la vitesse d'exécution, il faut que la mise en cache se fasse 
   szBlock         | MFlops  | MFlops(n=2048) | MFlops(n=512)  | MFlops(n=4096)
 ------------------|---------|----------------|----------------|---------------
 origine (=max)    |
-32                |2131     |1843.12         |2253.33         |1869.78
-64                |1666.03  |1957.27         |2412.11
-128               |2195.44  |1948.92         |2215.08
-256               |2098.15  |1934.57         |2474.82
-512               |2004.46  |1941.34         |1743.55
-1024              |1795.12  |1830.95         |2382.13
+32                |6334.3   |7705.02         |4053.4          |5291.79
+64                |8076.63  |6702.48         |3944.7          |5866.97
+128               |7916.44  |5014.13         |3372.76         |5227.55
+256               |6464.35  |4943.77         |4989.6          |4942.93
+512               |6973.75  |5835.07         |3047.86         |5461.39
+1024              |7278.37  |5793.3          |3938.59         |5307.25
 
 Encore une fois les résultats ne semblent pas vraiment cohérents et on observe pas d'amélioration majeure avec ce produit par blocs.
+
+ATTENTION : il fallait ajouter #pragma omp parallel for pour permettre de faire de la parallélisation dans le code ! Tous les résultats avant sont donc à retravailler
 
 
 
@@ -115,6 +121,8 @@ Encore une fois les résultats ne semblent pas vraiment cohérents et on observe
 512            |  8      |2116.16  |1745.24         |2365.56         |1868.2         |
 
 Je vois pas du tout ce qu'on peut en tirer encore une fois, pas d'amélioration majeure, la parallélisation ou les produits n'apportent que des améliorations très légères et encore.
+
+(Il faudrait refaire la simulation maitenant qu'on a ajouté le pragma)
 
 
 ### Comparaison avec BLAS, Eigen et numpy
