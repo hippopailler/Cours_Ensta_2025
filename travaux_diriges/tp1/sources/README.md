@@ -1,5 +1,7 @@
 
-# TD1
+Hippolyte PAILLER
+
+# TD1 : Partie 1
 
 `pandoc -s --toc README.md --css=./github-pandoc.css -o README.html`
 
@@ -33,7 +35,7 @@ Cela signifie que votre ordinateur dispose d'un seul processeur (socket).
 1024           |72.8781  (29.46)
 1025           |110.738  (19.44)
 1026           |120.775  (17.86)
-               |
+               
 
 Les matrices sont stockées en mémoire en ligne (row-major order), mais si l’algorithme accède aux colonnes plutôt qu’aux lignes, cela entraîne de nombreux cache misses, ralentissant les calculs.
 Si l'algorithme n'exploite pas toutes les ressources de l'ordinateur (comme les cœurs multiples d'un processeur), le calcul est séquentiel et donc lent.
@@ -140,3 +142,106 @@ Je vois pas du tout ce qu'on peut en tirer encore une fois, pas d'amélioration 
 ```
     $ for i in $(seq 1 4); do elap=$(OMP_NUM_THREADS=$i ./TestProductOmp.exe|grep "Temps CPU"|cut -d " " -f 7); echo -e "$i\t$elap"; done > timers.out
 ```
+# TD1 : Partie 2 :Parallélisation MPI
+
+## 2.1 Circulation d’un jeton dans un anneau
+
+Le programme `anneau.c` répond à la première partie de l'exercice.  
+Les points à noter sont les fonctions utiles à la parallélisation avec MPI :
+
+- **`MPI_Init()`** : Initialise MPI.
+- **`MPI_Comm_rank()`** : Récupère le rang du processus.
+- **`MPI_Comm_size()`** : Récupère le nombre total de processus.
+- **`MPI_Send()`** : Envoie le jeton au processus suivant.
+- **`MPI_Recv()`** : Reçoit le jeton du processus précédent.
+- **`MPI_Finalize()`** : Termine MPI proprement.
+
+Un autre point interressant, avec mpirun, je suis limité en nombre de processus à 4, pour pallier utilisation de la commande 
+mpirun --oversubscribe -np 9 ./a.out.
+
+## 2.2 Calcul très approché de pi
+
+On va procéder avec trois approches : 
+- **`Version séquentielle`** : fichier pi.c
+- **`Parallélisation avec OpenMP`** : fichier pi2.c
+- **`Parallélisation avec MPI`** : fichier pi3.c
+
+### Version Séquentielle :
+
+  nombre de points      | temps d'exécution (en s) | valeur estimée de pi  |
+---------------         |---------|---------|
+1000000                |  0.034550 |3.141840  |
+10000000                |  0.292802 |3.141255  |
+100000000                |  2.854211 |3.141778  |
+1000000000                |  26.813636 |3.141670  |
+
+#### Analyse :
+
+Le temps d'exécution augmente linéairement avec le nombre de points simulés.
+
+L'estimation de Pi devient plus précise avec l'augmentation du nombre de points.
+
+
+### Parallélisation avec OpenMP
+
+nombre de points     | nombre de coeurs | temps d'exécution (en s) | valeur estimée de pi  |
+---------------         |---------|---------|---------|
+1000000                 |1 |0.038110 | 3.141604
+1000000                 |2 |0.242975 | 3.142660
+1000000                 |3 |0.134782 | 3.144060
+1000000                 |4 |0.143371 | 3.143280
+10000000                |1 |0.295701 | 3.142393
+10000000                |2 |2.154881 | 3.140913
+10000000                |3 |1.139519 | 3.141229
+10000000                |4 |1.165567 | 3.141472
+100000000               |1 |2.637461 | 3.141484
+100000000               |2 |25.034596 | 3.141780
+100000000               |3 |11.259453 | 3.141754
+100000000               |4 |11.958764 | 3.141744
+1000000000              |1 |26.701964 | 3.141627
+1000000000              |2 |-------- | ----------
+1000000000              |3 |117.339325 | 3.141572
+1000000000              |4 |166.990636 | 3.141707
+
+#### Analyse 
+
+Accélération non linéaire : le programme ne tire pas toujours profit de l'ajout de threads.
+
+Pour petits nombres de points, OpenMP n'apporte pas toujours un gain significatif.
+
+Pour grands nombres de points, l'évolutivité est irrégulière, possiblement due à des conflits d'accès mémoire.
+
+### Parallélisation avec MPI
+
+nombre de points     | nombre de processus | temps d'exécution (en s) | valeur estimée de pi  |
+---------------         |---------|---------|---------|
+1000000                 |1 |0.053057 | 3.142872
+1000000                 |2 |0.021411 | 3.141208
+1000000                 |3 |0.016560 | 3.142240
+1000000                 |4 |0.009836 | 3.142548
+10000000                |1 |0.630449 | 3.142256
+10000000                |2 |0.289659 | 3.141602
+10000000                |3 |0.174782 | 3.141196
+10000000                |4 |0.244117 | 3.141411
+100000000                |1 |6.338576 | 3.141745
+100000000                |2 |2.150626 | 3.141779
+100000000                |3 |1.340845 | 3.141856
+100000000                |4 |1.205827 | 3.141736
+1000000000                |1 |53.806876 | 3.141576
+1000000000                |2 |20.251426 | 3.141639
+1000000000                |3 |14.062681 | 3.141626
+1000000000                |2 |12.865632 | 3.141605
+
+#### Analyse 
+
+MPI apporte une meilleure accélération que OpenMP, surtout pour de grandes valeurs de n.
+
+L'évolution est presque linéaire avec le nombre de processus.
+
+Il semblerait qu'il s'agissse du système de parallélisation le plus efficace pour allier rapidité et précision dans l'estimation de pi.
+
+
+#### Bilan 
+
+
+![](courbes_bilans.png)
