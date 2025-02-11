@@ -138,6 +138,24 @@ Afin de paralléliser le produit matrice–vecteur, on décide dans un premier t
 
 
 --> cf matvec1.py
+Pour un processus :
+- Temps du calcul du produit matrice-vecteur : 0.009612321853637695
+
+Pour deux processus :
+- Temps du calcul du produit matrice-vecteur : 0.00673985481262207
+- Temps du calcul du produit matrice-vecteur : 0.04432868957519531
+
+Pour trois processus :
+- Temps du calcul du produit matrice-vecteur : 0.24751996994018555
+- Temps du calcul du produit matrice-vecteur : 0.2139134407043457
+- Temps du calcul du produit matrice-vecteur : 0.02121734619140625
+
+Pour quatre processus :
+- Temps du calcul du produit matrice-vecteur : 0.04156041145324707
+- Temps du calcul du produit matrice-vecteur : 0.274141788482666
+- Temps du calcul du produit matrice-vecteur : 0.38411641120910645
+- Temps du calcul du produit matrice-vecteur : 0.0583951473236084
+
 
 ### b - Produit parallèle matrice-vecteur par ligne
 
@@ -147,7 +165,25 @@ Afin de paralléliser le produit matrice–vecteur, on décide dans un deuxième
 - paralléliser le code séquentiel `matvec.py` en veillant à ce que chaque tâche n’assemble que la partie de la matrice utile à son produit matrice-vecteur partiel. On s’assurera que toutes les tâches à la fin du programme contiennent le vecteur résultat complet.
 - Calculer le speed-up obtenu avec une telle approche
 
---> cf matvec1.py
+--> cf matvec2.py
+
+Pour un processus :
+- Temps du calcul du produit matrice-vecteur : 0.005747079849243164
+
+Pour deux processus :
+- Temps du calcul du produit matrice-vecteur : 0.0030715465545654297
+- Temps du calcul du produit matrice-vecteur : 0.07137298583984375
+
+Pour trois processus :
+- Temps du calcul du produit matrice-vecteur : 0.11696219444274902
+- Temps du calcul du produit matrice-vecteur : 0.11955881118774414
+- Temps du calcul du produit matrice-vecteur : 0.16460704803466797
+
+Pour quatre processus : 
+- Temps du calcul du produit matrice-vecteur : 0.24492692947387695
+- Temps du calcul du produit matrice-vecteur : 0.09019970893859863
+- Temps du calcul du produit matrice-vecteur : 0.09390997886657715
+- Temps du calcul du produit matrice-vecteur : 0.2702956199645996
 
 ## 3. Entraînement pour l'examen écrit
 
