@@ -37,7 +37,7 @@ class Grille:
     Exemple :
        grid = Grille( (10,10), init_pattern=[(2,2),(0,2),(4,2),(2,0),(2,4)], color_life=pg.Color("red"), color_dead=pg.Color("black"))
     """
-    def __init__(self, dim, init_pattern=None, color_life=pg.Color("black"), color_dead=pg.Color("white")):
+    def __init__(self, dim, init_pattern=None, color_life=pg.Color("green"), color_dead=pg.Color("white")):
         import random
         self.dimensions = dim
         if init_pattern is not None:
@@ -117,7 +117,7 @@ if __name__ == '__main__':
         "u" : ((200,200), [(101,101),(102,102),(103,102),(103,101),(104,103),(105,103),(105,102),(105,101),(105,105),(103,105),(102,105),(101,105),(101,104)]),
         "flat" : ((200,400), [(80,200),(81,200),(82,200),(83,200),(84,200),(85,200),(86,200),(87,200), (89,200),(90,200),(91,200),(92,200),(93,200),(97,200),(98,200),(99,200),(106,200),(107,200),(108,200),(109,200),(110,200),(111,200),(112,200),(114,200),(115,200),(116,200),(117,200),(118,200)])
     }
-    choice = 'glider'
+    choice = 'flat'
     if len(sys.argv) > 1 :
         choice = sys.argv[1]
     resx = 800
@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
     loop = True
     while loop:
-        #time.sleep(0.1) # A régler ou commenter pour vitesse maxi
+        time.sleep(0.1) # A régler ou commenter pour vitesse maxi
         t1 = time.time()
         diff = grid.compute_next_iteration()
         t2 = time.time()
