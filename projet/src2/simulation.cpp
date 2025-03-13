@@ -14,10 +14,11 @@ using namespace std::chrono_literals;
 
 struct ParamsType
 {
-    double length{10.};
+    double length{50.};
     unsigned discretization{200u};
-    std::array<double,2> wind{0.,0.};
-    Model::LexicoIndices start{10u,10u};
+    std::array<double,2> wind{10.,10.};
+    Model::LexicoIndices start{50u,50u};
+    int nb_iterations{700}; //Ajout du nombre d'itérations pour la simulation
 };
 
 void analyze_arg( int nargs, char* args[], ParamsType& params )
@@ -192,63 +193,119 @@ void display_params(ParamsType const& params)
               << "\tVecteur vitesse : [" << params.wind[0] << ", " << params.wind[1] << "]" << std::endl
               << "\tPosition initiale du foyer (col, ligne) : " << params.start.column << ", " << params.start.row << std::endl;
 }
+/*
+int main(int argc, char* argv[]) {
+    MPI_Init(&argc, &argv);  // Initialisation de MPI
 
-int main(int nargs, char* args[])
-{
-    int max=200;
-    MPI_Init(&nargs, &args);
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    auto params = parse_arguments(nargs-1, &args[1]);
-    if (rank==0) display_params(params);
+    ParamsType params = parse_arguments(argc - 1, &argv[1]);
     if (!check_params(params)) {
         MPI_Finalize();
         return EXIT_FAILURE;
     }
 
-    
-    auto simu = Model( params.length, params.discretization, params.wind,
-                       params.start);
-    SDL_Event event;
+    Model model(params.length, params.discretization, params.wind, params.start);
+    std::vector<std::uint8_t> fire_map(params.discretization * params.discretization);
+    std::vector<std::uint8_t> vegetation_map(params.discretization * params.discretization);
 
-        // Initialisation de Displayer dans le processus rank 0
-    std::unique_ptr<Displayer> displayer = nullptr;
-    
-    if (rank == 0) {
+    auto start_time = MPI_Wtime(); // Début mesure temps
+
+    if (rank == 0) {  
+        // Processus 0 : affichage
         auto displayer = Displayer::init_instance(params.discretization, params.discretization);
-    }
-    
-    double start_time, end_time, total_time = 0.0;
-    int iterations = 0;
-    // On peut plus boucler sur simu.update() car on doit synchroniser les processus MPI
-    while (iterations < max) {
-        start_time = MPI_Wtime();
+        while (true) {
+            MPI_Recv(fire_map.data(), fire_map.size(), MPI_UINT8_T, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(vegetation_map.data(), vegetation_map.size(), MPI_UINT8_T, 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            displayer->update(vegetation_map, fire_map);
 
-        if (rank == 0) {
-            if ((simu.time_step() & 31) == 0)
-                std::cout << "Time step " << simu.time_step() << "\n===============" << std::endl;
-
-            displayer->update(simu.vegetal_map(), simu.fire_map());
-            if (SDL_PollEvent(&event) && event.type == SDL_QUIT)
-                break;
+            // Condition d'arrêt pour le processus d'affichage
+            int stop_signal;
+            MPI_Recv(&stop_signal, 1, MPI_INT, 1, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            if (stop_signal == 1) break;
         }
-        
-        MPI_Barrier(MPI_COMM_WORLD);
-        simu.update();
-        
-        end_time = MPI_Wtime();
-        total_time += (end_time - start_time);
-        iterations++;
+    } else {  
+        // Processus > 0 : calcul
+        while (model.update()) {
+            fire_map = model.fire_map();
+            vegetation_map = model.vegetal_map();
+            MPI_Send(fire_map.data(), fire_map.size(), MPI_UINT8_T, 0, 0, MPI_COMM_WORLD);
+            MPI_Send(vegetation_map.data(), vegetation_map.size(), MPI_UINT8_T, 0, 1, MPI_COMM_WORLD);
+        }
 
-        //std::this_thread::sleep_for(0.1s);
+        // Envoyer un signal d'arrêt au processus d'affichage
+        int stop_signal = 1;
+        MPI_Send(&stop_signal, 1, MPI_INT, 0, 2, MPI_COMM_WORLD);
     }
 
+    auto end_time = MPI_Wtime(); // Fin mesure temps
     if (rank == 0) {
-        std::cout << "Temps moyen par itération : " << (total_time / iterations) << " secondes." << std::endl;
+        std::cout << "Temps moyen par itération : " << (end_time - start_time) / params.discretization << " s" << std::endl;
     }
 
     MPI_Finalize();
-    return EXIT_SUCCESS;
+    return 0;
+}*/
+
+int main(int argc, char* argv[]) {
+    MPI_Init(&argc, &argv);
+
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    ParamsType params = parse_arguments(argc - 1, &argv[1]);
+    if (!check_params(params)) {
+        MPI_Finalize();
+        return EXIT_FAILURE;
+    }
+
+    Model model(params.length, params.discretization, params.wind, params.start);
+    std::vector<std::uint8_t> fire_map(params.discretization * params.discretization);
+    std::vector<std::uint8_t> vegetation_map(params.discretization * params.discretization);
+
+    auto start_time = MPI_Wtime();
+
+    if (rank == 0) {
+        // Processus d'affichage
+        auto displayer = Displayer::init_instance(params.discretization, params.discretization);
+        for (int iter = 0; iter < params.nb_iterations; ++iter) {
+            // Attendre les données des processus de calcul
+            MPI_Recv(fire_map.data(), fire_map.size(), MPI_UINT8_T, 1, iter, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(vegetation_map.data(), vegetation_map.size(), MPI_UINT8_T, 1, iter+params.nb_iterations, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            
+            // Mettre à jour l'affichage
+            displayer->update(vegetation_map, fire_map);
+            
+            // Synchronisation avec les processus de calcul
+            MPI_Send(&iter, 1, MPI_INT, 1, iter, MPI_COMM_WORLD);
+        }
+    } else {
+        // Processus de calcul
+        for (int iter = 0; iter < params.nb_iterations; ++iter) {
+            // Effectuer une itération de calcul
+            model.update();
+            
+            // Envoyer les résultats au processus d'affichage
+            fire_map = model.fire_map();
+            vegetation_map = model.vegetal_map();
+            MPI_Send(fire_map.data(), fire_map.size(), MPI_UINT8_T, 0, iter, MPI_COMM_WORLD);
+            MPI_Send(vegetation_map.data(), vegetation_map.size(), MPI_UINT8_T, 0, iter+params.nb_iterations, MPI_COMM_WORLD);
+            
+            // Attendre la confirmation de l'affichage avant de continuer
+            int received_iter;
+            MPI_Recv(&received_iter, 1, MPI_INT, 0, iter, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+    }
+
+    auto end_time = MPI_Wtime();
+    
+    if (rank == 0) {
+        std::cout << "Temps moyen par itération : " << (end_time - start_time) / params.nb_iterations << " s" << std::endl;
+    }
+
+    MPI_Finalize();
+    return 0;
 }

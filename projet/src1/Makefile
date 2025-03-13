@@ -2,8 +2,6 @@ include Make_linux.inc
 #include Make_msys2.inc
 #include Make_osx.inc
 
-CXX = mpic++
-
 CXXFLAGS = -std=c++17 -Wall
 ifdef DEBUG
 CXXFLAGS += -g -O0 -fbounds-check -pedantic -D_GLIBCXX_DEBUG -fsanitize=address
@@ -11,8 +9,7 @@ else
 CXXFLAGS += -O3 -march=native
 endif
 
-
-ALL = simulation.exe 
+ALL= simulation.exe 
 
 default:	help
 
@@ -24,9 +21,8 @@ clean:
 .cpp.o:
 	$(CXX) $(CXXFLAGS) -MMD -c $< -o $@
 
-# Assurez-vous de lier les bibliothèques MPI ici.
 simulation.exe : display.o model.o simulation.o
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIB) -lmpi  # Liez la bibliothèque MPI ici.
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIB)	
 
 help:
 	@echo "Available targets : "
