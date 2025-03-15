@@ -213,13 +213,11 @@ int main(int argc, char* argv[]) {
 
     Model model(params.length, params.discretization, params.wind, params.start);
 
-    // Allocation sécurisée
-    assert(local_height > 0);  // Vérifie qu'on a bien une taille valide
-
     std::vector<std::uint8_t> local_fire_map((local_height + 2) * params.discretization, 0);
     std::vector<std::uint8_t> local_vegetation_map((local_height + 2) * params.discretization, 0);
 
     std::vector<std::uint8_t> fire_map, vegetation_map;
+    
     if (rank == 0) {
         fire_map.resize(params.discretization * params.discretization);
         vegetation_map.resize(params.discretization * params.discretization);
@@ -229,39 +227,43 @@ int main(int argc, char* argv[]) {
     if (rank == 0) {
         auto displayer = Displayer::init_instance(params.discretization, params.discretization);
         assert(displayer != nullptr);  // Vérifie que l'affichage est bien initialisé
+        
+        fire_map = model.fire_map();
+        vegetation_map = model.vegetal_map();
     }
 
-    fire_map = model.fire_map();
-    vegetation_map = model.vegetal_map();
     
-    // Initialisation des cartes locales depuis le modèle
-    for (int i = 1; i <= local_height; ++i) {
-        for (int j = 0; j < params.discretization; ++j) {
-            int global_i = start_row + i - 1;
-            local_fire_map[i * params.discretization + j] = fire_map[global_i * params.discretization + j];
-            local_vegetation_map[i * params.discretization + j] = vegetation_map[global_i * params.discretization + j];
-        }
-    }
-    
+    // Distribution des données aux processus
+    MPI_Scatter(fire_map.data(), local_height * params.discretization, MPI_UINT8_T,
+    local_fire_map.data() + params.discretization, local_height * params.discretization, MPI_UINT8_T,
+    0, MPI_COMM_WORLD);
+    MPI_Scatter(vegetation_map.data(), local_height * params.discretization, MPI_UINT8_T,
+    local_vegetation_map.data() + params.discretization, local_height * params.discretization, MPI_UINT8_T,
+    0, MPI_COMM_WORLD);
+
     auto start_time = MPI_Wtime();
 
     for (int iter = 0; iter < params.nb_iterations; ++iter) {
-        // Échange des frontières
-        if (rank > 0) {
+        // Échange des cellules fantômes
+        if (rank > 1) { //processus du dessus
             MPI_Send(local_fire_map.data() + params.discretization, params.discretization, MPI_UINT8_T, rank - 1, 0, MPI_COMM_WORLD);
             MPI_Recv(local_fire_map.data(), params.discretization, MPI_UINT8_T, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            
+            MPI_Send(local_vegetation_map.data() + params.discretization, params.discretization, MPI_UINT8_T, rank - 1, 0, MPI_COMM_WORLD);
+            MPI_Recv(local_vegetation_map.data(), params.discretization, MPI_UINT8_T, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
-        if (rank < size - 1) {
+
+        if (rank < size - 1) { //dessous
             MPI_Send(local_fire_map.data() + local_height * params.discretization, params.discretization, MPI_UINT8_T, rank + 1, 0, MPI_COMM_WORLD);
             MPI_Recv(local_fire_map.data() + (local_height + 1) * params.discretization, params.discretization, MPI_UINT8_T, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            
+            MPI_Send(local_vegetation_map.data() + local_height * params.discretization, params.discretization, MPI_UINT8_T, rank + 1, 0, MPI_COMM_WORLD);
+            MPI_Recv(local_vegetation_map.data() + (local_height + 1) * params.discretization, params.discretization, MPI_UINT8_T, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
 
-        // Mise à jour locale
-        model.update();
-
-        // Sécurité pour éviter segmentation fault
-        assert(local_fire_map.size() >= (local_height + 2) * params.discretization);
-        assert(local_vegetation_map.size() >= (local_height + 2) * params.discretization);
+        if (rank>0) {
+            model.update();
+        }
 
         // Récolte des données
         MPI_Gather(local_fire_map.data() + params.discretization, local_height * params.discretization, MPI_UINT8_T,
