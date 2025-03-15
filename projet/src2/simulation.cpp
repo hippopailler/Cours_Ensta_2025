@@ -14,10 +14,10 @@ using namespace std::chrono_literals;
 
 struct ParamsType
 {
-    double length{50.};
+    double length{10.};
     unsigned discretization{200u};
-    std::array<double,2> wind{10.,10.};
-    Model::LexicoIndices start{50u,50u};
+    std::array<double,2> wind{0.,0.};
+    Model::LexicoIndices start{10u,10u};
     int nb_iterations{700}; //Ajout du nombre d'itérations pour la simulation
 };
 
@@ -250,6 +250,7 @@ int main(int argc, char* argv[]) {
 }*/
 
 int main(int argc, char* argv[]) {
+    display_params(parse_arguments(argc - 1, &argv[1]));
     MPI_Init(&argc, &argv);
 
     int rank, size;
@@ -261,7 +262,7 @@ int main(int argc, char* argv[]) {
         MPI_Finalize();
         return EXIT_FAILURE;
     }
-
+    
     Model model(params.length, params.discretization, params.wind, params.start);
     std::vector<std::uint8_t> fire_map(params.discretization * params.discretization);
     std::vector<std::uint8_t> vegetation_map(params.discretization * params.discretization);
@@ -301,9 +302,10 @@ int main(int argc, char* argv[]) {
     }
 
     auto end_time = MPI_Wtime();
-    
+    double total_time = end_time - start_time;
     if (rank == 0) {
-        std::cout << "Temps moyen par itération : " << (end_time - start_time) / params.nb_iterations << " s" << std::endl;
+        std::cout << "Temps total : " << total_time << " s" << std::endl;
+        std::cout << "Temps moyen par itération : " << (total_time) / params.nb_iterations << " s" << std::endl;
     }
 
     MPI_Finalize();

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <mpi.h>
 
 #include "model.hpp"
 #include "display.hpp"
@@ -17,6 +18,7 @@ struct ParamsType
     unsigned discretization{200u};
     std::array<double,2> wind{0.,0.};
     Model::LexicoIndices start{10u,10u};
+    int nb_iterations{700}; //Ajout du nombre d'itérations pour la simulation
 };
 
 void analyze_arg( int nargs, char* args[], ParamsType& params )
@@ -192,35 +194,98 @@ void display_params(ParamsType const& params)
               << "\tPosition initiale du foyer (col, ligne) : " << params.start.column << ", " << params.start.row << std::endl;
 }
 
-int main(int nargs, char* args[]) {
-    auto params = parse_arguments(nargs - 1, &args[1]);
-    display_params(params);
-    if (!check_params(params)) return EXIT_FAILURE;
+int main(int argc, char* argv[]) {
+    MPI_Init(&argc, &argv);
 
-    auto displayer = Displayer::init_instance(params.discretization, params.discretization);
-    auto simu = Model(params.length, params.discretization, params.wind, params.start);
-    SDL_Event event;
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    constexpr int nb_iterations = 700;
-    auto start_time = std::chrono::high_resolution_clock::now(); // Début du chronomètre
-
-    for (int i = 0; i < nb_iterations && simu.update(); ++i) {
-        if ((simu.time_step() & 31) == 0)
-            std::cout << "Time step " << simu.time_step() << "\n===============" << std::endl;
-
-        displayer->update(simu.vegetal_map(), simu.fire_map());
-
-        if (SDL_PollEvent(&event) && event.type == SDL_QUIT)
-            break;
-
-        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    ParamsType params = parse_arguments(argc - 1, &argv[1]);
+    if (!check_params(params)) {
+        MPI_Finalize();
+        return EXIT_FAILURE;
     }
 
-    auto end_time = std::chrono::high_resolution_clock::now(); // Fin du chronomètre
-    std::chrono::duration<double> elapsed_time = end_time - start_time;
+    int local_height = params.discretization / size;
+    int start_row = rank * local_height;
+    int end_row = (rank == size - 1) ? params.discretization : (rank + 1) * local_height;
 
-    std::cout << "Temps total : " << elapsed_time.count() << " secondes\n";
-    std::cout << "Temps moyen par itération : " << (elapsed_time.count() / nb_iterations) << " secondes\n";
+    Model model(params.length, params.discretization, params.wind, params.start);
 
-    return EXIT_SUCCESS;
+    // Allocation sécurisée
+    assert(local_height > 0);  // Vérifie qu'on a bien une taille valide
+
+    std::vector<std::uint8_t> local_fire_map((local_height + 2) * params.discretization, 0);
+    std::vector<std::uint8_t> local_vegetation_map((local_height + 2) * params.discretization, 0);
+
+    std::vector<std::uint8_t> fire_map, vegetation_map;
+    if (rank == 0) {
+        fire_map.resize(params.discretization * params.discretization);
+        vegetation_map.resize(params.discretization * params.discretization);
+    }
+
+    Displayer* displayer = nullptr;
+    if (rank == 0) {
+        auto displayer = Displayer::init_instance(params.discretization, params.discretization);
+        assert(displayer != nullptr);  // Vérifie que l'affichage est bien initialisé
+    }
+
+    fire_map = model.fire_map();
+    vegetation_map = model.vegetal_map();
+    
+    // Initialisation des cartes locales depuis le modèle
+    for (int i = 1; i <= local_height; ++i) {
+        for (int j = 0; j < params.discretization; ++j) {
+            int global_i = start_row + i - 1;
+            local_fire_map[i * params.discretization + j] = fire_map[global_i * params.discretization + j];
+            local_vegetation_map[i * params.discretization + j] = vegetation_map[global_i * params.discretization + j];
+        }
+    }
+    
+    auto start_time = MPI_Wtime();
+
+    for (int iter = 0; iter < params.nb_iterations; ++iter) {
+        // Échange des frontières
+        if (rank > 0) {
+            MPI_Send(local_fire_map.data() + params.discretization, params.discretization, MPI_UINT8_T, rank - 1, 0, MPI_COMM_WORLD);
+            MPI_Recv(local_fire_map.data(), params.discretization, MPI_UINT8_T, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        if (rank < size - 1) {
+            MPI_Send(local_fire_map.data() + local_height * params.discretization, params.discretization, MPI_UINT8_T, rank + 1, 0, MPI_COMM_WORLD);
+            MPI_Recv(local_fire_map.data() + (local_height + 1) * params.discretization, params.discretization, MPI_UINT8_T, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+
+        // Mise à jour locale
+        model.update();
+
+        // Sécurité pour éviter segmentation fault
+        assert(local_fire_map.size() >= (local_height + 2) * params.discretization);
+        assert(local_vegetation_map.size() >= (local_height + 2) * params.discretization);
+
+        // Récolte des données
+        MPI_Gather(local_fire_map.data() + params.discretization, local_height * params.discretization, MPI_UINT8_T,
+                   fire_map.data(), local_height * params.discretization, MPI_UINT8_T, 0, MPI_COMM_WORLD);
+        MPI_Gather(local_vegetation_map.data() + params.discretization, local_height * params.discretization, MPI_UINT8_T,
+                   vegetation_map.data(), local_height * params.discretization, MPI_UINT8_T, 0, MPI_COMM_WORLD);
+
+        // Vérification avant d'afficher
+        if (rank == 0 && displayer != nullptr) {
+            if (iter % 100 == 0) {
+                std::cout << "Itération : " << iter << std::endl;
+                displayer->update(vegetation_map, fire_map);
+            }
+        }
+    }
+
+    auto end_time = MPI_Wtime();
+    double total_time = end_time - start_time;
+
+    if (rank == 0) {
+        std::cout << "Temps total : " << total_time << " s" << std::endl;
+        std::cout << "Temps moyen par itération : " << total_time / params.nb_iterations << " s" << std::endl;
+    }
+
+    MPI_Finalize();
+    return 0;
 }
